@@ -1,5 +1,6 @@
 
 import { Canvas } from "@react-three/fiber";
+import { Shape } from "three";
 
 const fruitCrops = new Set([
   "Mango", "Orange", "Apple", "Lemon", "Guava", "Coconut", "Grape",
@@ -47,6 +48,7 @@ function Ground({ soilType }) {
     Loamy: "#654321",
     Silt: "#8A8060",
   };
+  const soilColor = soilColors[soilType] || "#654321";
 
   return (
     <group>
@@ -57,21 +59,49 @@ function Ground({ soilType }) {
       >
         <planeGeometry args={[12, 12]} />
         <meshStandardMaterial
-          color={soilColors[soilType] || "#654321"}
+          color={soilColor}
           roughness={1}
         />
       </mesh>
 
-      {Array.from({ length: 9 }, (_, i) => (
+      {[-1.65, 0, 1.65].map((x) => (
         <mesh
-          key={i}
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[(i - 4) * 1.25, -0.025, 0]}
+          key={`bed-${x}`}
+          position={[x, 0.015, 0]}
+          scale={[0.55, 0.1, 5.3]}
         >
-          <boxGeometry args={[0.025, 10.5, 0.018]} />
-          <meshStandardMaterial color="#9A815C" roughness={1} />
+          <sphereGeometry args={[1, 18, 10]} />
+          <meshStandardMaterial color={soilColor} roughness={1} />
         </mesh>
       ))}
+
+      {[-2.48, -0.82, 0.82, 2.48].map((x) => (
+        <mesh
+          key={`furrow-${x}`}
+          position={[x, -0.012, 0]}
+          scale={[0.12, 0.012, 5.15]}
+        >
+          <sphereGeometry args={[1, 12, 8]} />
+          <meshStandardMaterial color="#493622" roughness={1} />
+        </mesh>
+      ))}
+
+      {Array.from({ length: 24 }, (_, i) => {
+        const x = Math.sin(i * 12.9898) * 4.8;
+        const z = Math.sin(i * 78.233) * 4.8;
+        const size = 0.035 + (i % 3) * 0.012;
+
+        return (
+          <mesh
+            key={`soil-clod-${i}`}
+            position={[x, -0.006, z]}
+            scale={[size * 1.5, 0.012, size]}
+          >
+            <sphereGeometry args={[1, 8, 6]} />
+            <meshStandardMaterial color={i % 2 ? "#8C704A" : "#705638"} roughness={1} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
@@ -101,6 +131,74 @@ function Fruit({ position, color, scale = [1, 1, 1] }) {
       <sphereGeometry args={[0.105, 12, 10]} />
       <meshStandardMaterial color={color} roughness={0.48} />
     </mesh>
+  );
+}
+
+const maizeLeafShape = new Shape();
+maizeLeafShape.moveTo(0, 0);
+maizeLeafShape.quadraticCurveTo(0.28, 0.13, 0.63, 0.12);
+maizeLeafShape.quadraticCurveTo(0.88, 0.1, 1, 0);
+maizeLeafShape.quadraticCurveTo(0.72, -0.1, 0.42, -0.11);
+maizeLeafShape.quadraticCurveTo(0.12, -0.08, 0, 0);
+
+function MaizeLeaf({ position, rotation, length, color }) {
+  return (
+    <mesh
+      position={position}
+      rotation={rotation}
+      scale={[length, 1, 1]}
+      castShadow
+    >
+      <shapeGeometry args={[maizeLeafShape]} />
+      <meshStandardMaterial color={color} roughness={0.82} side={2} />
+    </mesh>
+  );
+}
+
+function CornEar({ position, rotation = [0, 0, 0] }) {
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh scale={[0.105, 0.34, 0.105]} castShadow>
+        <sphereGeometry args={[1, 12, 10]} />
+        <meshStandardMaterial color="#E7B735" roughness={0.62} />
+      </mesh>
+
+      {Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 4 }, (_, kernel) => {
+          const angle = (kernel / 4) * Math.PI * 2 + (row % 2) * 0.22;
+          const y = (row - 2) * 0.105;
+
+          return (
+            <mesh
+              key={`${row}-${kernel}`}
+              position={[
+                Math.cos(angle) * 0.1,
+                y,
+                Math.sin(angle) * 0.1,
+              ]}
+              scale={[0.028, 0.042, 0.028]}
+              castShadow
+            >
+              <sphereGeometry args={[1, 7, 6]} />
+              <meshStandardMaterial color="#F5D15B" roughness={0.56} />
+            </mesh>
+          );
+        })
+      )}
+
+      <MaizeLeaf
+        position={[-0.035, -0.1, 0.025]}
+        rotation={[0.12, 0, -0.8]}
+        length={0.38}
+        color="#4B873B"
+      />
+      <MaizeLeaf
+        position={[0.035, -0.12, -0.025]}
+        rotation={[-0.12, Math.PI, 0.82]}
+        length={0.36}
+        color="#5A9845"
+      />
+    </group>
   );
 }
 
@@ -631,18 +729,50 @@ function GrainPlant({ crop, leafColor, stemColor, stressed }) {
               <meshStandardMaterial color={stemColor} />
             </mesh>
 
-            {[-1, 1, -1].map((side, j) => (
-              <Leaf
-                key={j}
-                position={[side * (crop === "Maize" ? 0.22 : 0.15), 0.35 + j * 0.3, 0.02]}
-                rotation={[0.1, 0, side * -0.45]}
-                scale={crop === "Maize" ? [1.7, 0.19, 0.3] : [1.15, 0.17, 0.27]}
-                color={leafColor}
-              />
-            ))}
+            {crop === "Maize"
+              ? Array.from({ length: 6 }, (_, j) => {
+                  const angle = (j / 6) * Math.PI * 2 + (i % 2) * 0.3;
+                  const level = 0.34 + j * 0.19;
+
+                  return (
+                    <MaizeLeaf
+                      key={j}
+                      position={[0, level, 0]}
+                      rotation={[
+                        0,
+                        angle,
+                        -0.22 + (j % 3) * 0.1,
+                      ]}
+                      length={1.1 + (j % 3) * 0.12}
+                      color={leafColor}
+                    />
+                  );
+                })
+              : [-1, 1, -1].map((side, j) => (
+                  <Leaf
+                    key={j}
+                    position={[side * 0.15, 0.35 + j * 0.3, 0.02]}
+                    rotation={[0.1, 0, side * -0.45]}
+                    scale={[1.15, 0.17, 0.27]}
+                    color={leafColor}
+                  />
+                ))}
 
             {crop === "Maize" && (
-              <Fruit position={[0.12, 0.88, 0.08]} color="#D5A52E" scale={[0.7, 1.8, 0.7]} />
+              <>
+                <CornEar
+                  position={[0.1, 0.82, 0.08]}
+                  rotation={[0.08, 0, -0.14]}
+                />
+                <CornEar
+                  position={[-0.09, 1.08, -0.08]}
+                  rotation={[-0.08, 0, 0.16]}
+                />
+                <mesh position={[0, height + 0.14, 0]} castShadow>
+                  <coneGeometry args={[0.07, 0.34, 7]} />
+                  <meshStandardMaterial color="#B5A344" roughness={0.9} />
+                </mesh>
+              </>
             )}
 
             {crop !== "Maize" && (
@@ -893,9 +1023,17 @@ function FarmScene({
 
   return (
     <>
-      <color attach="background" args={["#83CBEA"]} />
-      <ambientLight intensity={1.35} />
-      <directionalLight position={[5, 9, 6]} intensity={2.1} castShadow />
+      <color attach="background" args={["#9BD8EA"]} />
+      <hemisphereLight args={["#E1F5FC", "#776044", 1.05]} />
+      <ambientLight intensity={0.38} />
+      <directionalLight
+        position={[-4, 9, 5]}
+        intensity={2.2}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      <directionalLight position={[4, 4, -5]} intensity={0.55} />
 
       <Ground soilType={soilType} />
 
@@ -928,10 +1066,10 @@ export default function Farm3D({
         height: "450px",
         borderRadius: "16px",
         overflow: "hidden",
-        background: "#83CBEA",
+        background: "#9BD8EA",
       }}
     >
-      <Canvas shadows camera={{ position: [7, 6, 8], fov: 50 }}>
+      <Canvas shadows dpr={[1, 1.5]} camera={{ position: [7, 6, 8], fov: 50 }}>
         <FarmScene
           selectedCrop={selectedCrop}
           soilType={soilType}

@@ -77,7 +77,7 @@ async function askGemini(prompt) {
   if (!interaction.output_text) {
     throw new Error("Gemini returned an empty answer.");
   }
-
+console.log("Gemini raw answer:", interaction.output_text);
   return interaction.output_text;
 }
 
@@ -108,7 +108,7 @@ async function askGroq(prompt) {
   );
 console.log("Groq HTTP status:", response.status);
   const data = await response.json();
-
+console.log("Groq response data:", JSON.stringify(data).slice(0, 1500));
   if (!response.ok) {
     throw new Error(
       data.error?.message || `Groq request failed (${response.status}).`
