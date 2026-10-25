@@ -595,7 +595,7 @@ confirmed by a local agricultural expert before major treatment.
 const controller = new AbortController();
 abortControllerRef.current = controller;
 
-const timeoutId = setTimeout(() => controller.abort(), 30000);
+const timeoutId = setTimeout(() => controller.abort(), 90000);
 
 let response;
 
