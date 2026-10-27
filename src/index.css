@@ -54,6 +54,26 @@ body {
   margin: 0;
 }
 
+.farm-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+}
+
+.farm-dashboard > section,
+.farm-dashboard > aside {
+  min-width: 0;
+}
+
+.farm-scene {
+  height: clamp(360px, 42vw, 520px);
+}
+
+@media (max-width: 850px) {
+  .farm-dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 #root {
   width: 1126px;
   max-width: 100%;

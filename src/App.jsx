@@ -2,50 +2,25 @@ import { useState, useRef } from "react";
 import Farm3D from "./Farm3D";
 import { crops, cropRequirements } from "./crops";
 import { askFarmAgent } from "./farmAgent";
-const applyCropCommand = (
-  question,
-  crops,
-  setSelectedCrop,
-  setSoilType,
-  setWaterAvailability
-) => {
-  const text = question.toLowerCase();
-if (text.includes("sandy soil")) setSoilType("Sandy");
-if (text.includes("loamy soil")) setSoilType("Loamy");
-if (text.includes("clay soil")) setSoilType("Clay");
+import { applyFarmActions, initialFarmState } from "./farmState";
 
-const waterMatch = text.match(/(\d{1,3})\s*%/);
-if (waterMatch) {
-  const value = Number(waterMatch[1]);
-  if (value >= 0 && value <= 100) {
-    setWaterAvailability(`${value}%`);
-  }
-}
- const cropNames = crops
-  .map((crop) => typeof crop === "string" ? crop : crop.name)
-  .filter(Boolean)
-  .sort((a, b) => b.length - a.length);
-
-const match = cropNames.find((name) =>
-  new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text)
-);
-
-if (match) {
-  setSelectedCrop(match);
-}
-
-  if (!match) return null;
-
-  const cropName = typeof match === "string" ? match : match.name;
-  setSelectedCrop(cropName);
-
-  return cropName;
-};
 function App() {
-  const [soilType, setSoilType] = useState("Sandy");
-  const [scenario, setScenario] = useState("Normal");
-  const [selectedCrop, setSelectedCrop] = useState("Maize");
-  const [plantCount, setPlantCount] = useState(6);
+  const [farmState, setFarmState] = useState(initialFarmState);
+  const farmStateRef = useRef(initialFarmState);
+  const updateFarmState = (update) => {
+    const nextState = update(farmStateRef.current);
+    farmStateRef.current = nextState;
+    setFarmState(nextState);
+    return nextState;
+  };
+  const {
+    soilType,
+    scenario,
+    irrigationActive,
+    selectedCrop,
+    plantCount,
+    waterAvailability,
+  } = farmState;
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef(null);
 const [cropImage, setCropImage] = useState(null);
@@ -105,25 +80,7 @@ const handleCropDiagnosis = async () => {
     }
     const actions = data.actions || {};
 
-if (actions.selectedCrop) {
-  setSelectedCrop(actions.selectedCrop);
-}
-
-if (actions.soilType) {
-  setSoilType(actions.soilType);
-}
-
-if (actions.waterAvailability) {
-  setWaterAvailability(actions.waterAvailability);
-}
-
-if (actions.plantCount) {
-  setPlantCount(actions.plantCount);
-}
-
-if (actions.scenario) {
-  runScenario(actions.scenario);
-}
+    updateFarmState((current) => applyFarmActions(current, actions));
     setDiagnosis(
   data.diagnosis
     .replace(/\*\*/g, "")
@@ -145,25 +102,30 @@ if (actions.scenario) {
     : null;
   const [question, setQuestion] = useState("");
   const [message, setMessage] = useState("");
-  const [waterAvailability, setWaterAvailability] = useState("74%");
 
  const runScenario = (name) => {
-  setScenario(name);
+  const nextScenario = name === "Drought + Irrigation" ? "Drought" : name;
+  const nextIrrigationActive = name === "Drought + Irrigation";
 
   const nextWaterAvailability =
-    name === "Normal"
+    nextScenario === "Normal"
       ? "74%"
-      : name === "Drought"
+      : nextScenario === "Drought" && !nextIrrigationActive
       ? "35%"
       : "80%";
 
-  setWaterAvailability(nextWaterAvailability);
+  updateFarmState((current) => ({
+    ...current,
+    scenario: nextScenario,
+    irrigationActive: nextIrrigationActive,
+    waterAvailability: nextWaterAvailability,
+  }));
 
-  if (name === "Normal") {
+  if (nextScenario === "Normal") {
     setMessage("☀️ Normal conditions: crops are growing under normal conditions.");
-  } else if (name === "Drought") {
+  } else if (!nextIrrigationActive) {
     setMessage("🌵 Drought detected: water availability is reduced.");
-  } else if (name === "Drought + Irrigation") {
+  } else {
     setMessage("💧 Irrigation activated: water availability is improved.");
   }
 };
@@ -238,9 +200,8 @@ const soilData = {
       </header>
 
       <main
+        className="farm-dashboard"
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 330px",
           gap: "20px",
         }}
       >
@@ -260,6 +221,7 @@ const soilData = {
   selectedCrop={selectedCrop}
   soilType={soilType}
   scenario={scenario}
+  irrigationActive={irrigationActive}
   waterAvailability={waterAvailability}
   plantCount={plantCount}
 />
@@ -272,8 +234,10 @@ const soilData = {
                 flexWrap: "wrap",
               }}
             >
-              <span>🌤️ Weather: Sunny</span>
-              <span>💧 Irrigation: Available</span>
+              <span>
+  {scenario === "Drought" ? "☀️ Weather: Drought" : "🌤️ Weather: Sunny"}
+</span>
+              <span>💧 Irrigation: {irrigationActive ? "Active" : "Off"}</span>
               <span>🌱 Crop: {selectedCrop}</span>
             </div>
           </div>
@@ -290,7 +254,9 @@ const soilData = {
 
   <select
     value={selectedCrop}
-    onChange={(e) => setSelectedCrop(e.target.value)}
+    onChange={(e) =>
+      updateFarmState((current) => ({ ...current, selectedCrop: e.target.value }))
+    }
     style={{
       width: "100%",
       padding: "12px",
@@ -380,7 +346,9 @@ const soilData = {
 
   <select
     value={soilType}
-    onChange={(e) => setSoilType(e.target.value)}
+    onChange={(e) =>
+      updateFarmState((current) => ({ ...current, soilType: e.target.value }))
+    }
     style={{
       width: "100%",
       padding: "12px",
@@ -459,7 +427,12 @@ const soilData = {
             </div>
 
             <p style={{ color: "#7ee2a8", marginTop: "18px" }}>
-              Active scenario: <strong>{scenario}</strong>
+              Active scenario:{" "}
+              <strong>
+                {scenario === "Drought" && irrigationActive
+                  ? "Drought + Irrigation"
+                  : scenario}
+              </strong>
             </p>
           </div>
         </section>
@@ -597,67 +570,46 @@ abortControllerRef.current = controller;
 
 const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-let response;
-
 try {
-  response = await fetch(
-    "http://localhost:3001/api/farm-agent",
+  const data = await askFarmAgent(
+    question.trim(),
     {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        question: question.trim(),
-        context: {
-          selectedCrop,
-          soilType,
-          scenario,
-          waterAvailability,
-        },
-      }),
-      signal: controller.signal,
-    }
+      selectedCrop,
+      soilType,
+      scenario,
+      irrigationActive,
+      plantCount,
+      waterAvailability,
+    },
+    controller.signal
   );
-} finally {
-  clearTimeout(timeoutId);
-  abortControllerRef.current = null;
-}
-
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "AI request failed");
-      }
 const actions = data.actions || {};
-
-if (actions.selectedCrop) {
-  setSelectedCrop(actions.selectedCrop);
-}
-
-if (actions.soilType) {
-  setSoilType(actions.soilType);
-}
-
-if (actions.waterAvailability) {
-  setWaterAvailability(actions.waterAvailability);
-}
-
-if (typeof actions.plantCount === "number") {
-  setPlantCount(actions.plantCount);
-}
-
-if (actions.scenario) {
-  runScenario(actions.scenario);
-}
-  const cropCommand = applyCropCommand(
-  question,
-  crops,
-  setSelectedCrop,
-  setSoilType,
-  setWaterAvailability
+const previousFarmState = farmStateRef.current;
+const nextFarmState = updateFarmState((current) =>
+  applyFarmActions(current, actions)
 );
+
+const appliedActions = [];
+if (nextFarmState.selectedCrop !== previousFarmState.selectedCrop) {
+  appliedActions.push(`crop: ${nextFarmState.selectedCrop}`);
+}
+if (nextFarmState.plantCount !== previousFarmState.plantCount) {
+  appliedActions.push(`plant count: ${nextFarmState.plantCount}`);
+}
+if (nextFarmState.soilType !== previousFarmState.soilType) {
+  appliedActions.push(`soil: ${nextFarmState.soilType}`);
+}
+if (nextFarmState.waterAvailability !== previousFarmState.waterAvailability) {
+  appliedActions.push(`water availability: ${nextFarmState.waterAvailability}`);
+}
+if (nextFarmState.scenario !== previousFarmState.scenario) {
+  appliedActions.push(`scenario: ${nextFarmState.scenario}`);
+}
+if (nextFarmState.irrigationActive !== previousFarmState.irrigationActive) {
+  appliedActions.push(
+    `irrigation: ${nextFarmState.irrigationActive ? "on" : "off"}`
+  );
+}
 
 
 
@@ -673,18 +625,28 @@ const cleanAnswer = (data.answer || "No answer received.")
   .trim();
 
 
-setMessage(
-  cropCommand
-    ? `Farm updated: ${cropCommand} selected.\n\n${cleanAnswer}`
-    : cleanAnswer
-);
+const messageParts = [];
+if (appliedActions.length) {
+  messageParts.push(`Applied: ${appliedActions.join(", ")}.`);
+}
+if (data.clarification) {
+  messageParts.push(`Clarification: ${data.clarification}`);
+}
+if (cleanAnswer) messageParts.push(cleanAnswer);
+setMessage(messageParts.join("\n\n"));
+} finally {
+  clearTimeout(timeoutId);
+  abortControllerRef.current = null;
+}
 
 } catch (error) {
   if (error.name === "AbortError") {
     setMessage("Simulation stopped or timed out. You can try again.");
   } else {
     console.error(error);
-    setMessage("Could not connect to FarmScenario AI. Please check the server and try again.");
+    setMessage(
+      error.message || "FarmScenario AI request failed. No farm settings were changed."
+    );
   }
 }
  finally {
@@ -718,7 +680,7 @@ setMessage(
       10,
       Math.min(
         100,
-        (scenario === "Normal" ? 82 : scenario === "Drought" ? 55 : 78) +
+        (scenario === "Normal" ? 82 : irrigationActive ? 78 : 55) +
           (Number.parseFloat(waterAvailability) - 74) * 0.3
       )
     ).toFixed(0)}%
@@ -730,9 +692,9 @@ setMessage(
             <p>🌱 Soil condition: <strong>
   {scenario === "Normal"
     ? "Good"
-    : scenario === "Drought"
-    ? "Dry"
-    : "Improving"}
+    : irrigationActive
+      ? "Improving"
+      : "Dry"}
 </strong></p>
             <div
               style={{
@@ -744,11 +706,11 @@ setMessage(
             >
               💡 AI Recommendation
               <p style={{ color: "#b9c8c0" }}>
-               {scenario === "Normal"
-  ? "Maintain current conditions and monitor crop health."
+               {irrigationActive
+  ? "Irrigation is active. Continue monitoring soil moisture and crop health."
   : scenario === "Drought"
-  ? "Consider irrigation if drought conditions continue."
-  : "Irrigation is active. Continue monitoring soil moisture and crop health."}
+    ? "Consider irrigation if drought conditions continue."
+    : "Maintain current conditions and monitor crop health."}
               </p>
             </div>
           </div>
