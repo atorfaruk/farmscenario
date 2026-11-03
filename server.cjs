@@ -17,7 +17,7 @@ app.use(express.json({ limit: "1mb" }));
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 8 * 1024 * 1024,
+    fileSize: 4 * 1024 * 1024,
   },
   fileFilter: (req, file, callback) => {
     if (!file.mimetype || !file.mimetype.startsWith("image/")) {
@@ -547,8 +547,12 @@ app.use((error, req, res, next) => {
   next();
 });
 
-app.listen(PORT, () => {
-  console.log(
-    `FarmScenario AI server running at http://localhost:${PORT}`
-  );
-});
+module.exports = app;
+
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(
+      `FarmScenario AI server running at http://localhost:${PORT}`
+    );
+  });
+}

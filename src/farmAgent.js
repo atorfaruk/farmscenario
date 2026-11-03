@@ -1,9 +1,11 @@
 import { validateFarmAgentResponse } from "./farmActions.js";
-
+const API_BASE_URL = import.meta.env.DEV
+  ? "http://localhost:3001"
+  : "";
 export async function askFarmAgent(question, context = {}, signal) {
   let response;
   try {
-    response = await fetch("http://localhost:3001/api/farm-agent", {
+    response = await fetch(`${API_BASE_URL}/api/farm-agent`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -14,9 +16,9 @@ export async function askFarmAgent(question, context = {}, signal) {
   } catch (error) {
     if (error.name === "AbortError") throw error;
     throw new Error(
-      "Could not reach the FarmScenario AI server at localhost:3001. Start it with node server.cjs and try again.",
-      { cause: error }
-    );
+  "Could not reach the FarmScenario AI server. Please try again later.",
+  { cause: error }
+);
   }
 
   let data;

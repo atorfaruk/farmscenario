@@ -70,7 +70,7 @@ const handleCropDiagnosis = async () => {
     formData.append("cropType", selectedCrop);
 
     const response = await fetch(
-      "http://localhost:3001/api/crop-diagnosis",
+     "/api/crop-diagnosis",
       {
         method: "POST",
         body: formData,
