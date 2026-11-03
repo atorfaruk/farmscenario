@@ -6,7 +6,9 @@ export const farmActionSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    selectedCrop: { type: "string", enum: supportedCropNames },
+   selectedCrop: {
+  type: "string"
+},
     plantCount: { type: "integer", minimum: 1, maximum: 12 },
     soilType: { type: "string", enum: soilTypes },
     waterAvailability: {
@@ -42,14 +44,29 @@ export function normalizeFarmActions(value) {
     if (!actionKeys.has(key)) continue;
 
     if (key === "selectedCrop") {
-      const crop = normalizedCropNames.get(normalizeIdentifier(actionValue));
-      if (crop) actions.selectedCrop = crop;
-      continue;
-    }
+  const crop = normalizedCropNames.get(
+    normalizeIdentifier(actionValue)
+  );
+
+  const customCrop =
+    typeof actionValue === "string"
+      ? actionValue.trim()
+      : "";
+
+  if (crop) {
+    actions.selectedCrop = crop;
+  } else if (customCrop) {
+    actions.selectedCrop =
+      customCrop.charAt(0).toUpperCase() +
+      customCrop.slice(1);
+  }
+
+  continue;
+}
 
     if (key === "plantCount") {
       const count = Number(actionValue);
-      if (Number.isInteger(count) && count >= 1 && count <= 12) {
+      if (Number.isInteger(count) && count >= 1 && count <= 30) {
         actions.plantCount = count;
       }
       continue;
@@ -121,7 +138,21 @@ export function detectExplicitFarmActions(question) {
   ) {
     actions.selectedCrop = matchedCrop;
   }
+  const unknownCropMatch = text.match(
+    /\b(?:plant|grow)\s+(.+?)(?:\s+on\s+(?:my|the)\s+farm\b|[.!?,;]|$)/i
+  );
 
+  if (!actions.selectedCrop && unknownCropMatch) {
+    const requestedCrop = unknownCropMatch[1]
+      .trim()
+      .replace(/^(?:the|some|a)\s+/i, "");
+
+    if (requestedCrop) {
+      actions.selectedCrop =
+        requestedCrop.charAt(0).toUpperCase() +
+        requestedCrop.slice(1);
+    }
+  }
   const soilMatches = [...lower.matchAll(/\b(sandy|clay|loamy|silt(?:y)?)\b/g)];
   const soilMatch = soilMatches.reverse().find((match) => {
     const before = lower.slice(Math.max(0, match.index - 28), match.index);

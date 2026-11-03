@@ -1,7 +1,10 @@
 import { useState, useRef } from "react";
 import Farm3D from "./Farm3D";
 import { crops, cropRequirements } from "./crops";
-import { askFarmAgent } from "./farmAgent";
+import {
+  askFarmAgent,
+  discoverCropOnline,
+} from "./farmAgent.js";
 import { applyFarmActions, initialFarmState } from "./farmState";
 
 function App() {
@@ -24,6 +27,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef(null);
 const [cropImage, setCropImage] = useState(null);
+const [customCropInfo, setCustomCropInfo] = useState(null);
 const [diagnosis, setDiagnosis] = useState("");
 const [isDiagnosing, setIsDiagnosing] = useState(false);
 
@@ -224,6 +228,7 @@ const soilData = {
   irrigationActive={irrigationActive}
   waterAvailability={waterAvailability}
   plantCount={plantCount}
+  customCropInfo={customCropInfo}
 />
 
             <div
@@ -584,7 +589,7 @@ try {
     controller.signal
   );
 const actions = data.actions || {};
-const previousFarmState = farmStateRef.current;
+  const previousFarmState = farmStateRef.current;
 const nextFarmState = updateFarmState((current) =>
   applyFarmActions(current, actions)
 );

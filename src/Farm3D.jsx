@@ -1,13 +1,16 @@
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useMemo, useRef, useState } from "react";
 import {
+  ACESFilmicToneMapping,
   BackSide,
   BufferGeometry,
   Color,
   Float32BufferAttribute,
   PlaneGeometry,
   SphereGeometry,
+  SRGBColorSpace,
 } from "three";
 
 const fruitCrops = new Set([
@@ -37,7 +40,7 @@ const cashCrops = new Set([
 const bedCenters = [-1.65, 0, 1.65];
 
 function getPlantLayout(plantCount) {
-  const count = Math.max(1, Math.min(plantCount || 6, 12));
+ const count = Math.max(1, Math.min(plantCount || 6, 30));
   const plantBedIndexes =
     count === 1
       ? [1]
@@ -198,8 +201,66 @@ function FarmTerrain() {
       frustumCulled={false}
       raycast={() => null}
     >
-      <meshStandardMaterial vertexColors roughness={1} />
+      <meshStandardMaterial
+  vertexColors
+  roughness={0.92}
+  metalness={0}
+  dithering
+/>
     </mesh>
+  );
+}
+
+function TerrainGrass() {
+  const clumps = useMemo(() => {
+    const items = [];
+
+   for (let i = 0; i < 18; i += 1) {
+      const angle = i * 2.399963;
+     const radius = 9 + (i % 7) * 1.4;
+
+      items.push({
+        x: Math.cos(angle) * radius,
+        z: Math.sin(angle) * radius,
+        height: 0.08 + (i % 3) * 0.02,
+        rotation: angle,
+        color: ["#667C46", "#778A50", "#596F3F"][i % 3],
+      });
+    }
+
+    return items;
+  }, []);
+
+  return (
+    <group raycast={() => null}>
+      {clumps.map((clump, index) => (
+        <group
+          key={index}
+          position={[clump.x, -0.08, clump.z]}
+          rotation={[0, clump.rotation, 0]}
+        >
+          {[-1, 0, 1].map((blade) => (
+            <mesh
+              key={blade}
+              position={[
+                blade * 0.045,
+                clump.height * 0.5,
+                Math.abs(blade) * 0.025,
+              ]}
+              rotation={[0, blade * 0.45, blade * -0.18]}
+            >
+              <coneGeometry
+                args={[0.025, clump.height, 4]}
+              />
+              <meshStandardMaterial
+                color={clump.color}
+                roughness={1}
+              />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
   );
 }
 
@@ -557,35 +618,55 @@ function Fruit({ position, color, scale = [1, 1, 1] }) {
     </mesh>
   );
 }
-
 const maizeLeafGeometry = (() => {
   const geometry = new BufferGeometry();
-  const lengthSegments = 12;
-  const widthSegments = 4;
+  const lengthSegments = 16;
+  const widthSegments = 6;
   const positions = [];
   const indices = [];
 
   for (let lengthIndex = 0; lengthIndex <= lengthSegments; lengthIndex += 1) {
     const along = lengthIndex / lengthSegments;
-    const width = 0.12 * Math.pow(Math.sin(Math.PI * along), 0.72);
-    const centerZ = 0.04 * Math.sin(Math.PI * along) - 0.15 * along * along;
+
+    // Narrow, pointed leaves with a natural curve
+    const width =
+      0.085 * Math.pow(Math.sin(Math.PI * along), 0.8);
+
+    const centerZ =
+      0.055 * Math.sin(Math.PI * along) -
+      0.18 * along * along;
 
     for (let widthIndex = 0; widthIndex <= widthSegments; widthIndex += 1) {
       const across = (widthIndex / widthSegments) * 2 - 1;
+
+      const centerFold =
+        0.035 *
+        (1 - across * across) *
+        Math.sin(Math.PI * along);
+
       positions.push(
         along,
         across * width,
-        centerZ +
-          0.045 * (1 - across * across) * Math.sin(Math.PI * along)
+        centerZ + centerFold
       );
     }
   }
 
   for (let lengthIndex = 0; lengthIndex < lengthSegments; lengthIndex += 1) {
     for (let widthIndex = 0; widthIndex < widthSegments; widthIndex += 1) {
-      const start = lengthIndex * (widthSegments + 1) + widthIndex;
+      const start =
+        lengthIndex * (widthSegments + 1) + widthIndex;
+
       const nextRow = start + widthSegments + 1;
-      indices.push(start, nextRow, start + 1, start + 1, nextRow, nextRow + 1);
+
+      indices.push(
+        start,
+        nextRow,
+        start + 1,
+        start + 1,
+        nextRow,
+        nextRow + 1
+      );
     }
   }
 
@@ -593,10 +674,13 @@ const maizeLeafGeometry = (() => {
     "position",
     new Float32BufferAttribute(positions, 3)
   );
+
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
+
   return geometry;
 })();
+
 
 function MaizeLeaf({ position, rotation, length, color }) {
   return (
@@ -1532,10 +1616,13 @@ function GrainPlant({ crop, leafColor, stemColor, stressed, plantIndex = 0 }) {
 
         return (
           <group key={i} position={[x, 0, 0]}>
-            <mesh position={[0, height / 2, 0]}>
-              <cylinderGeometry args={[0.035, 0.055, height, 7]} />
-              <meshStandardMaterial color={stemColor} />
-            </mesh>
+            <mesh position={[0, height / 2, 0]} castShadow>
+  <cylinderGeometry args={[0.04, 0.065, height, 9]} />
+  <meshStandardMaterial
+    color={stemColor}
+    roughness={0.88}
+  />
+</mesh>
 
             {crop === "Maize"
               ? Array.from({ length: 7 }, (_, j) => {
@@ -1544,7 +1631,7 @@ function GrainPlant({ crop, leafColor, stemColor, stressed, plantIndex = 0 }) {
                     (j % 2 ? 0.22 : -0.12) +
                     i * 0.3 +
                     plantVariation * 0.055;
-                  const level = 0.34 + j * 0.19 + plantVariation * 0.006;
+                  const level = 0.30 + j * 0.195 + plantVariation * 0.012;
                   const leafLength =
                     [0.96, 1.12, 1.02, 1.2, 0.94, 1.16, 0.9][j] *
                     (1 + plantVariation * 0.018);
@@ -1558,10 +1645,10 @@ function GrainPlant({ crop, leafColor, stemColor, stressed, plantIndex = 0 }) {
                         Math.sin(angle) * 0.025,
                       ]}
                       rotation={[
-                        Math.sin(angle) * 0.12,
-                        angle,
-                        -0.3 + (j % 4) * 0.16,
-                      ]}
+  Math.sin(angle) * 0.16,
+  angle,
+  -0.42 + (j % 4) * 0.22,
+]}
                       length={leafLength}
                       color={leafColor}
                     />
@@ -1583,13 +1670,14 @@ function GrainPlant({ crop, leafColor, stemColor, stressed, plantIndex = 0 }) {
             {crop === "Maize" && (
               <>
                 <CornEar
-                  position={[0.1, 0.82, 0.08]}
-                  rotation={[0.08, plantVariation * 0.025, -0.14]}
-                />
-                <CornEar
-                  position={[-0.09, 1.08, -0.08]}
-                  rotation={[-0.08, plantVariation * -0.025, 0.16]}
-                />
+  position={[0.13, 0.86, 0.07]}
+  rotation={[0.08, plantVariation * 0.035, -0.2]}
+/>
+
+<CornEar
+  position={[-0.12, 1.12, -0.07]}
+  rotation={[-0.08, plantVariation * -0.035, 0.2]}
+/>
                 <mesh position={[0, height + 0.14, 0]} castShadow>
                   <coneGeometry args={[0.07, 0.34, 7]} />
                   <meshStandardMaterial color="#B5A344" roughness={0.9} />
@@ -1865,6 +1953,7 @@ function CashPlant({ crop, leafColor, stemColor, stressed }) {
 function CropPlant({
   position,
   selectedCrop,
+  customCropInfo = null,
   scenario,
   irrigationActive,
   waterAvailability,
@@ -1893,6 +1982,14 @@ function CropPlant({
   const isLegume = legumeCrops.has(selectedCrop);
   const isGrain = grainCrops.has(selectedCrop);
   const isCash = cashCrops.has(selectedCrop);
+const isCustomCrop = !(
+  isFruit ||
+  isLeafy ||
+  isRoot ||
+  isLegume ||
+  isGrain ||
+  isCash
+);
 
   return (
     <group
@@ -1995,6 +2092,14 @@ function CropPlant({
           <meshStandardMaterial color="#2589D8" emissive="#125080" />
         </mesh>
       )}
+      {isCustomCrop && (
+  <VegetablePlant
+    crop={selectedCrop}
+    leafColor={leafColor}
+    stemColor={stemColor}
+    stressed={stressed}
+  />
+)}
     </group>
   );
 }
@@ -2225,11 +2330,12 @@ function FarmScene({
   scenario,
   irrigationActive = false,
   waterAvailability = "74%",
-  plantCount = 12,
-  selectedPlantIndex,
-  onSelectPlant,
-  selectedBedIndex,
-  onSelectBed,
+plantCount = 12,
+customCropInfo = null,
+selectedPlantIndex,
+onSelectPlant,
+selectedBedIndex,
+onSelectBed,
 }) {
   const { positions, plantBedIndexes } = getPlantLayout(plantCount);
   const waterPercent = Number.parseFloat(
@@ -2244,8 +2350,9 @@ function FarmScene({
     <>
       <color attach="background" args={["#D8D0B2"]} />
       <SkyDome />
-      <DistantScenery />
-      <FarmTerrain />
+<DistantScenery />
+<FarmTerrain />
+
       <fog attach="fog" args={["#D8D0B2", 18, 38]} />
       <hemisphereLight args={["#E6F0E7", "#70583D", 0.94]} />
       <ambientLight intensity={0.4} />
@@ -2283,9 +2390,10 @@ function FarmScene({
 
       {positions.map((position, index) => (
         <CropPlant
-          key={`${selectedCrop}-${index}`}
-          position={position}
-          selectedCrop={selectedCrop}
+  key={`${selectedCrop}-${index}`}
+  position={position}
+  selectedCrop={selectedCrop}
+  customCropInfo={customCropInfo}
           scenario={scenario}
           irrigationActive={isIrrigated}
           waterAvailability={waterAvailability}
@@ -2305,6 +2413,7 @@ export default function Farm3D({
   irrigationActive = false,
   waterAvailability = "74%",
   plantCount = 12,
+  customCropInfo = null,
 }) {
   const { count, plantsPerBed } = getPlantLayout(plantCount);
   const [selection, setSelection] = useState({ plantIndex: null, count });
@@ -2357,11 +2466,16 @@ export default function Farm3D({
       }}
     >
       <Canvas
-        shadows
-        dpr={[1, 1.5]}
-        camera={{ position: [8, 8.5, 9.8], fov: 48 }}
-        onPointerMissed={clearSelection}
-      >
+  shadows
+  dpr={[1, 1.5]}
+  gl={{
+    antialias: true,
+    toneMapping: ACESFilmicToneMapping,
+    outputColorSpace: SRGBColorSpace,
+  }}
+  camera={{ position: [8, 8.5, 9.8], fov: 48 }}
+  onPointerMissed={clearSelection}
+>
         <FarmScene
           selectedCrop={selectedCrop}
           soilType={soilType}
