@@ -65,18 +65,53 @@ const handleCropDiagnosis = async () => {
   setDiagnosis("");
 
   try {
-    const formData = new FormData();
-    formData.append("image", cropImage.file);
-    formData.append("cropType", selectedCrop);
+   let imageToUpload = cropImage.file;
 
-    const response = await fetch(
-     "/api/crop-diagnosis",
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
+if (imageToUpload.size > 3.8 * 1024 * 1024) {
+  const bitmap = await createImageBitmap(imageToUpload);
+  const canvas = document.createElement("canvas");
 
+  let scale = Math.min(1, 1800 / Math.max(bitmap.width, bitmap.height));
+
+  let blob = null;
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+
+    const context = canvas.getContext("2d");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    const quality = [0.82, 0.75, 0.68, 0.60, 0.52][attempt];
+
+    blob = await new Promise((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", quality);
+    });
+
+    if (blob && blob.size <= 3.8 * 1024 * 1024) break;
+
+    scale *= 0.8;
+  }
+
+  bitmap.close();
+
+  if (!blob || blob.size > 3.8 * 1024 * 1024) {
+    throw new Error("Image is too large. Please select a smaller crop image.");
+  }
+
+  imageToUpload = new File([blob], "crop-image.jpg", {
+    type: "image/jpeg",
+  });
+}
+
+const formData = new FormData();
+formData.append("image", imageToUpload);
+formData.append("cropType", selectedCrop);
+
+const response = await fetch("/api/crop-diagnosis", {
+  method: "POST",
+  body: formData,
+});
     const data = await response.json();
 
     if (!response.ok) {
